@@ -99,7 +99,7 @@ For example, imagine building a `<login-form />` component that accepts a userna
   `
 })
 export class LoginForm {
-  constructor(private store: Store<State>) { }
+  constructor(private store: Store<AppState>) { }
 
   username = '';
   password = '';
@@ -118,11 +118,11 @@ export class LoginForm {
 
 Now we can write a saga that listens for the `AUTH_REQUESTED` action being dispatched and makes the Http request. If the request succeeds, we will return an `AUTH_SUCCESS` action and if the request fails we will return an `AUTH_FAILURE` action (returned action will be dispatched by store-saga middleware):
 
-```js
-const loginEffect = createSaga(function loginSagaFactory(http: Http) {
+```typescript
+const loginEffectProvider: Provider = createSaga(function loginSagaFactory(http: Http) {
 
-  return function loginSaga(iteration$: Observable<any>) {
-    return iteration$
+  return function loginSaga(iteration$: Observable<SagaIteration<AppState>>): Observable<Action> {
+    const action$ = iteration$
       .filter(iteration => iteration.action.type === 'AUTH_REQUESTED')
       .map(iteration => iteration.action.payload)
       .mergeMap(payload => {
@@ -140,19 +140,22 @@ const loginEffect = createSaga(function loginSagaFactory(http: Http) {
             });
           });
       });
+    
+    return action$;
   };
 
 }, [ Http ]);
 ```
 
-The last step is to install the saga middleware when our application bootstraps, providing all of the sagas we want to run:
+The last step is to install the saga middleware when our application bootstraps, providing all of the sagas we want to run. Remember to also provide any dependency needed by your saga/saga-factory (`Http` in this case):
 
 ```js
 import { installSagaMiddleware } from 'store-saga';
 
 bootstrap(App, [
   provideStore(reducer),
-  installSagaMiddleware(loginEffect)
+  installSagaMiddleware(loginEffectProvider),
+  HTTP_PROVIDERS
 ]);
 ```
 
