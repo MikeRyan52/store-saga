@@ -21,27 +21,32 @@ The middleware API has been removed in Store v2.0. For this reason, there will b
 npm install store-saga --save
 ```
 
-Write a saga:
+Write a saga (you _don't_ have to import and specify all those types, but they help to spot errors earlier):
+
 ```ts
+import {Observable} from 'rxjs/Observable';
+import {Action} from '@ngrx/store';
 import {createSaga} from 'store-saga';
 
-export const increment = createSaga(function(){
-  return iteration$ => iteration$
-    .filter(iter => iter.action.type === 'DECREMENT')
-    .map(() => {
-      return { type: 'INCREMENT'}
-    });
+export const incrementProvider = createSaga(function() {
+  return function incrementSaga(iteration$): Observable<Action> {
+    return iteration$
+      .filter(iter => iter.action.type === 'DECREMENT')
+      .map(() => {
+        return <Action> { type: 'INCREMENT'}
+      });
+  }
 });
 ```
 
-Install the store-saga middleware in the same place you provide ngrx/store:
+Install the store-saga middleware in the same place where you provide @ngrx/store:
 
 ```ts
 import {installSagaMiddleware} from 'store-saga';
 
 bootstrap(App, [
   provideStore(reducer, initialState),
-  installSagaMiddleware(increment)
+  installSagaMiddleware(incrementProvider)
 ]);
 ```
 
@@ -55,7 +60,7 @@ A _pure_ component has no invisible inputs, instead relying on the above strateg
 
 #### How can an input be _invisible_ ?
 Consider the following simple counter component:
-```js
+```ts
 @Component({
   selector: 'counter',
   template: `
@@ -82,7 +87,7 @@ In store-saga, sagas are simply functions that accept a `saga$` observable and r
 
 For example, imagine building a `<login-form />` component that accepts a username and password. In order to verify authentication you need to make an Http request to your authentication server. This request is a side-effect and should be isolated from our `<login-form />` component. To do this, we will have the component dispatch an `AUTH_REQUEST` action when the user submits the form:
 
-```js
+```ts
 @Component({
   selector: 'login-form',
   template: `
@@ -102,7 +107,7 @@ For example, imagine building a `<login-form />` component that accepts a userna
   `
 })
 export class LoginForm {
-  constructor(private store: Store<State>) { }
+  constructor(private store: Store<AppState>) { }
 
   username = '';
   password = '';
@@ -121,11 +126,11 @@ export class LoginForm {
 
 Now we can write a saga that listens for the `AUTH_REQUESTED` action being dispatched and makes the Http request. If the request succeeds, we will return an `AUTH_SUCCESS` action and if the request fails we will return an `AUTH_FAILURE` action (returned action will be dispatched by store-saga middleware):
 
-```js
-const loginEffect = createSaga(function loginSagaFactory(http: Http) {
+```ts
+const loginEffectProvider: Provider = createSaga(function loginSagaFactory(http: Http) {
 
-  return function loginSaga(iteration$: Observable<any>) {
-    return iteration$
+  return function loginSaga(iteration$: Observable<SagaIteration<AppState>>): Observable<Action> {
+    const action$ = iteration$
       .filter(iteration => iteration.action.type === 'AUTH_REQUESTED')
       .map(iteration => iteration.action.payload)
       .mergeMap(payload => {
@@ -143,19 +148,22 @@ const loginEffect = createSaga(function loginSagaFactory(http: Http) {
             });
           });
       });
+    
+    return action$;
   };
 
 }, [ Http ]);
 ```
 
-The last step is to install the saga middleware when our application bootstraps, providing all of the sagas we want to run:
+The last step is to install the saga middleware when our application bootstraps, providing all of the sagas we want to run. Remember to also provide any dependency needed by your saga/saga-factory (`Http` in this case):
 
-```js
+```ts
 import { installSagaMiddleware } from 'store-saga';
 
 bootstrap(App, [
   provideStore(reducer),
-  installSagaMiddleware(loginEffect)
+  installSagaMiddleware(loginEffectProvider),
+  HTTP_PROVIDERS
 ]);
 ```
 
